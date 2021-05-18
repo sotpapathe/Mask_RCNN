@@ -693,8 +693,9 @@ def refine_detections_graph(rois, probs, deltas, window, config):
         window: (y1, x1, y2, x2) in normalized coordinates. The part of the image
             that contains the image excluding the padding.
 
-    Returns detections shaped: [num_detections, (y1, x1, y2, x2, class_id, score)] where
-        coordinates are normalized.
+    Returns detections shaped:
+    [num_detections, (y1, x1, y2, x2, class_id, score_1, score_2, ..., score_num_classes)]
+    where coordinates are normalized.
     """
     # Class IDs per ROI
     class_ids = tf.argmax(probs, axis=1, output_type=tf.int32)
@@ -765,12 +766,13 @@ def refine_detections_graph(rois, probs, deltas, window, config):
     top_ids = tf.nn.top_k(class_scores_keep, k=num_keep, sorted=True)[1]
     keep = tf.gather(keep, top_ids)
 
-    # Arrange output as [N, (y1, x1, y2, x2, class_id, score)]
+    # Arrange output as [N, (y1, x1, y2, x2, class_id, score_1, score_2, ..., score_num_classes)]
     # Coordinates are normalized.
+    all_class_scores_keep = tf.gather(probs, keep)
     detections = tf.concat([
         tf.gather(refined_rois, keep),
         tf.to_float(tf.gather(class_ids, keep))[..., tf.newaxis],
-        tf.gather(class_scores, keep)[..., tf.newaxis]
+        all_class_scores_keep
         ], axis=1)
 
     # Pad with zeros if detections < DETECTION_MAX_INSTANCES
@@ -784,8 +786,8 @@ class DetectionLayer(KE.Layer):
     returns the final detection boxes.
 
     Returns:
-    [batch, num_detections, (y1, x1, y2, x2, class_id, class_score)] where
-    coordinates are normalized.
+    [batch, num_detections, (y1, x1, y2, x2, class_id, score_1, score_2, ..., score_num_classes)]
+    where coordinates are normalized.
     """
 
     def __init__(self, config=None, **kwargs):
@@ -813,14 +815,14 @@ class DetectionLayer(KE.Layer):
             self.config.IMAGES_PER_GPU)
 
         # Reshape output
-        # [batch, num_detections, (y1, x1, y2, x2, class_id, class_score)] in
-        # normalized coordinates
+        # [batch, num_detections, (y1, x1, y2, x2, class_id, score_1, score_2, ..., score_num_classes)]
+        # in normalized coordinates
         return tf.reshape(
             detections_batch,
-            [self.config.BATCH_SIZE, self.config.DETECTION_MAX_INSTANCES, 6])
+            [self.config.BATCH_SIZE, self.config.DETECTION_MAX_INSTANCES, 5 + self.config.NUM_CLASSES])
 
     def compute_output_shape(self, input_shape):
-        return (None, self.config.DETECTION_MAX_INSTANCES, 6)
+        return (None, self.config.DETECTION_MAX_INSTANCES, 5 + self.config.NUM_CLASSES)
 
 
 ############################################################
@@ -2038,8 +2040,8 @@ class MaskRCNN():
                                      fc_layers_size=config.FPN_CLASSIF_FC_LAYERS_SIZE)
 
             # Detections
-            # output is [batch, num_detections, (y1, x1, y2, x2, class_id, score)] in
-            # normalized coordinates
+            # output is [batch, num_detections, (y1, x1, y2, x2, class_id, score_1, score_2, ..., score_num_classes)]
+            # in normalized coordinates
             detections = DetectionLayer(config, name="mrcnn_detection")(
                 [rpn_rois, mrcnn_class, mrcnn_bbox, input_image_meta])
 
@@ -2420,7 +2422,7 @@ class MaskRCNN():
         network output to a format suitable for use in the rest of the
         application.
 
-        detections: [N, (y1, x1, y2, x2, class_id, score)] in normalized coordinates
+        detections: [N, (y1, x1, y2, x2, class_id, score_1, score_2, ..., score_num_classes)] in normalized coordinates
         mrcnn_mask: [N, height, width, num_classes]
         original_image_shape: [H, W, C] Original image shape before resizing
         image_shape: [H, W, C] Shape of the image after resizing and padding
@@ -2441,7 +2443,7 @@ class MaskRCNN():
         # Extract boxes, class_ids, scores, and class-specific masks
         boxes = detections[:N, :4]
         class_ids = detections[:N, 4].astype(np.int32)
-        scores = detections[:N, 5]
+        scores = detections[:N, 5:]
         masks = mrcnn_mask[np.arange(N), :, :, class_ids]
 
         # Translate normalized coordinates in the resized image to pixel
@@ -2487,7 +2489,7 @@ class MaskRCNN():
         Returns a list of dicts, one dict per image. The dict contains:
         rois: [N, (y1, x1, y2, x2)] detection bounding boxes
         class_ids: [N] int class IDs
-        scores: [N] float probability scores for the class IDs
+        scores: [N, num_classes] float probability scores for each class ID
         masks: [H, W, N] instance binary masks
         """
         assert self.mode == "inference", "Create model in inference mode."
