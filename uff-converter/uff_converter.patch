@@ -1,0 +1,17 @@
+# Change the order from HWC to CHW as shown here:
+#  https://github.com/NVIDIA/TensorRT/tree/master/samples/opensource/sampleUffMaskRCNN#generating-uff-model
+# Needs to be applied to
+#   $CONDA_ENV_ROOT/lib/python3.7/site-packages/uff/converters/tensorflow/converter_functions.py
+# patch ~/.conda/envs/maskrcnn/lib/python3.7/site-packages/uff/converters/tensorflow/converter_functions.py uff_converter.patch
+
+--- converter_functions.py	2021-05-18 11:18:28.111114340 +0100
++++ converter_functions.py	2021-05-18 11:49:51.371892138 +0100
+@@ -568,7 +568,7 @@
+         raise ValueError("Unsupported data format: " + fmt)
+ 
+     uff_graph.conv_transpose(
+-        inputs[2], inputs[1], inputs[0],
++        inputs[0], inputs[2], inputs[1],
+         strides, padding,
+         dilation=None, number_groups=number_groups,
+         left_format=lhs_fmt, right_format=rhs_fmt,
