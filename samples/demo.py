@@ -77,8 +77,19 @@ image = skimage.io.imread(os.path.join(IMAGE_DIR, random.choice(file_names)))
 # Run detection
 results = model.detect([image], verbose=1)
 
-# Visualize results
+# Print and visualize the detections
 r = results[0]
+
+max_class_len = max([len(class_names[id]) for id in r["class_ids"]])
+print("\nDetections")
+for i, class_id in enumerate(r["class_ids"]):
+    class_name = class_names[class_id]
+    scores = r["scores"][i]
+    score = scores[class_id]
+    bbox = r["rois"][i]
+    format_str = "{:3} {:" + str(max_class_len) + "} {:5.3f} with BBox from {},{} to {},{}"
+    print(format_str.format(i + 1, class_name, score, bbox[1], bbox[0], bbox[3], bbox[2]))
+
 visualize.display_instances(image, r['rois'], r['masks'], r['class_ids'], 
                             class_names, r['scores'])
 
