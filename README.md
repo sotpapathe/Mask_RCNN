@@ -5,6 +5,17 @@
 - Added code from the
   [NVIDIA TensorRT repository](https://github.com/NVIDIA/TensorRT/tree/master/samples/opensource/sampleUffMaskRCNN#generating-uff-model)
   to make it easier to generate a TensorRT model from the network.
+- Converted the demo IPython notebook into a proper Python 3 script.
+
+## Usage
+
+To run inference on one of the sample images run:
+
+``` sh
+./samples/demo.py
+```
+
+
 
 # Mask R-CNN for Object Detection and Segmentation
 
